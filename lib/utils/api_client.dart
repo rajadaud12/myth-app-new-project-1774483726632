@@ -4,11 +4,22 @@ import 'package:http/http.dart' as http;
 class ApiException implements Exception {
   final int statusCode;
   final String message;
+  final Map<String, dynamic>? validationErrors;
   
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, {this.validationErrors});
   
   @override
   String toString() => 'ApiException: $statusCode - $message';
+  
+  String getDetailedMessage() {
+    if (validationErrors != null && validationErrors!.isNotEmpty) {
+      final errors = validationErrors!.entries
+          .map((e) => '${e.key}: ${e.value}')
+          .join('\n');
+      return '$message\n$errors';
+    }
+    return message;
+  }
 }
 
 class ApiClient {
@@ -32,13 +43,16 @@ class ApiClient {
     }
     
     String errorMessage;
+    Map<String, dynamic>? validationErrors;
+    
     try {
       final body = json.decode(response.body);
       if (body is Map) {
-        errorMessage = body['message'] ?? body['error'] ?? 'Unknown error';
+        errorMessage = body['message'] ?? body['error'] ?? body['Message'] ?? 'Unknown error';
         if (body.containsKey('errors') && body['errors'] is Map) {
-          final errors = body['errors'] as Map<String, dynamic>;
-          errorMessage = errors.values.map((e) => e.toString()).join(', ');
+          validationErrors = Map<String, dynamic>.from(body['errors']);
+        } else if (body.containsKey('validation_errors') && body['validation_errors'] is Map) {
+          validationErrors = Map<String, dynamic>.from(body['validation_errors']);
         }
       } else {
         errorMessage = body.toString();
@@ -59,7 +73,10 @@ class ApiClient {
       case 409:
         throw ApiException(409, 'Conflict: $errorMessage');
       case 422:
-        throw ApiException(422, 'Validation error: $errorMessage');
+        final exception = ApiException(422, 'Validation error: $errorMessage', validationErrors: validationErrors);
+        throw exception;
+      case 429:
+        throw ApiException(429, 'Too many requests: Please wait before trying again');
       case 500:
         throw ApiException(500, 'Server error: Please try again later');
       case 502:
@@ -71,10 +88,14 @@ class ApiClient {
     }
   }
   
-  static Future<Map<String, dynamic>> get(String endpoint, {String? token}) async {
+  static Future<Map<String, dynamic>> get(String endpoint, {String? token, Map<String, String>? queryParams}) async {
     try {
+      var uri = Uri.parse('$baseUrl$endpoint');
+      if (queryParams != null && queryParams.isNotEmpty) {
+        uri = uri.replace(queryParameters: queryParams);
+      }
       final response = await http.get(
-        Uri.parse('$baseUrl$endpoint'),
+        uri,
         headers: _getHeaders(token: token),
       ).timeout(timeout);
       return handleResponse(response);
@@ -92,6 +113,37 @@ class ApiClient {
         Uri.parse('$baseUrl$endpoint'),
         headers: _getHeaders(token: token),
         body: json.encode(body),
+      ).timeout(timeout);
+      return handleResponse(response);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network error: ${e.message}');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(0, 'Connection failed: Please check your internet');
+    }
+  }
+  
+  static Future<Map<String, dynamic>> put(String endpoint, Map<String, dynamic> body, {String? token}) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(token: token),
+        body: json.encode(body),
+      ).timeout(timeout);
+      return handleResponse(response);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network error: ${e.message}');
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      throw ApiException(0, 'Connection failed: Please check your internet');
+    }
+  }
+  
+  static Future<Map<String, dynamic>> delete(String endpoint, {String? token}) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: _getHeaders(token: token),
       ).timeout(timeout);
       return handleResponse(response);
     } on http.ClientException catch (e) {
