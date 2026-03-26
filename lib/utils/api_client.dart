@@ -73,7 +73,7 @@ class ApiClient {
       case 409:
         String conflictDetail = errorMessage;
         if (errorMessage == 'Unknown error' || errorMessage.isEmpty) {
-          conflictDetail = 'This action could not be completed due to a conflict. Please try again or refresh the data.';
+          conflictDetail = 'This item already exists. Please update or remove the existing one first.';
         }
         throw ApiException(409, conflictDetail, validationErrors: validationErrors);
       case 422:
