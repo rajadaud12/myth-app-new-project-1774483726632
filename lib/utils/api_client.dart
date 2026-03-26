@@ -16,34 +16,48 @@ class ApiClient {
   static const Duration timeout = Duration(seconds: 30);
   
   static Future<Map<String, dynamic>> handleResponse(http.Response response) async {
-    switch (response.statusCode) {
-      case 200:
-      case 201:
-        return json.decode(response.body);
-      case 422:
-        final body = json.decode(response.body);
-        String errorMessage = 'Validation error';
-        if (body is Map && body.containsKey('message')) {
-          errorMessage = body['message'];
-        } else if (body is Map && body.containsKey('errors')) {
-          final errors = body['errors'];
-          if (errors is Map) {
-            errorMessage = errors.values.map((e) => e.toString()).join(', ');
-          }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (response.body.isEmpty) {
+        return {};
+      }
+      return json.decode(response.body);
+    }
+    
+    String errorMessage;
+    try {
+      final body = json.decode(response.body);
+      if (body is Map) {
+        errorMessage = body['message'] ?? body['error'] ?? 'Unknown error';
+        if (body.containsKey('errors') && body['errors'] is Map) {
+          final errors = body['errors'] as Map<String, dynamic>;
+          errorMessage = errors.values.map((e) => e.toString()).join(', ');
         }
-        throw ApiException(422, errorMessage);
+      } else {
+        errorMessage = body.toString();
+      }
+    } catch (_) {
+      errorMessage = response.body.isNotEmpty ? response.body : 'Unknown error';
+    }
+    
+    switch (response.statusCode) {
       case 400:
-        throw ApiException(400, 'Bad request');
+        throw ApiException(400, 'Bad request: $errorMessage');
       case 401:
-        throw ApiException(401, 'Unauthorized');
+        throw ApiException(401, 'Unauthorized: Please login again');
       case 403:
-        throw ApiException(403, 'Forbidden');
+        throw ApiException(403, 'Forbidden: Access denied');
       case 404:
-        throw ApiException(404, 'Not found');
+        throw ApiException(404, 'Not found: Resource does not exist');
+      case 422:
+        throw ApiException(422, 'Validation error: $errorMessage');
       case 500:
-        throw ApiException(500, 'Server error');
+        throw ApiException(500, 'Server error: Please try again later');
+      case 502:
+        throw ApiException(502, 'Bad gateway: Service temporarily unavailable');
+      case 503:
+        throw ApiException(503, 'Service unavailable: Please try again later');
       default:
-        throw ApiException(response.statusCode, 'Unknown error');
+        throw ApiException(response.statusCode, errorMessage);
     }
   }
   
@@ -54,9 +68,11 @@ class ApiClient {
         headers: {'Content-Type': 'application/json'},
       ).timeout(timeout);
       return handleResponse(response);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network error: ${e.message}');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw ApiException(0, e.toString());
+      throw ApiException(0, 'Connection failed: Please check your internet');
     }
   }
   
@@ -68,9 +84,11 @@ class ApiClient {
         body: json.encode(body),
       ).timeout(timeout);
       return handleResponse(response);
+    } on http.ClientException catch (e) {
+      throw ApiException(0, 'Network error: ${e.message}');
     } catch (e) {
       if (e is ApiException) rethrow;
-      throw ApiException(0, e.toString());
+      throw ApiException(0, 'Connection failed: Please check your internet');
     }
   }
 }
