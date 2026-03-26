@@ -9,16 +9,18 @@ class ApiException implements Exception {
   ApiException(this.statusCode, this.message, {this.validationErrors});
   
   @override
-  String toString() => 'ApiException: $statusCode - $message';
+  String toString() => message;
   
-  String getDetailedMessage() {
+  String getFullError() {
+    final buffer = StringBuffer();
+    buffer.writeln('Error $statusCode: $message');
     if (validationErrors != null && validationErrors!.isNotEmpty) {
-      final errors = validationErrors!.entries
-          .map((e) => '${e.key}: ${e.value}')
-          .join('\n');
-      return '$message\n$errors';
+      buffer.writeln('Validation errors:');
+      validationErrors!.forEach((key, value) {
+        buffer.writeln('  - $key: $value');
+      });
     }
-    return message;
+    return buffer.toString();
   }
 }
 
@@ -34,6 +36,14 @@ class ApiClient {
     };
   }
   
+  static String _getErrorMessage(dynamic body, int statusCode) {
+    if (body is Map) {
+      final message = body['message'] ?? body['error'] ?? body['Message'];
+      if (message != null) return message;
+    }
+    return 'Request failed with status code $statusCode';
+  }
+  
   static Future<Map<String, dynamic>> handleResponse(http.Response response) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
@@ -42,23 +52,23 @@ class ApiClient {
       return json.decode(response.body);
     }
     
-    String errorMessage;
     Map<String, dynamic>? validationErrors;
+    String errorMessage;
     
     try {
       final body = json.decode(response.body);
+      errorMessage = _getErrorMessage(body, response.statusCode);
       if (body is Map) {
-        errorMessage = body['message'] ?? body['error'] ?? body['Message'] ?? 'Unknown error';
         if (body.containsKey('errors') && body['errors'] is Map) {
           validationErrors = Map<String, dynamic>.from(body['errors']);
         } else if (body.containsKey('validation_errors') && body['validation_errors'] is Map) {
           validationErrors = Map<String, dynamic>.from(body['validation_errors']);
         }
-      } else {
-        errorMessage = body.toString();
       }
     } catch (_) {
-      errorMessage = response.body.isNotEmpty ? response.body : 'Unknown error';
+      errorMessage = response.body.isNotEmpty 
+          ? response.body 
+          : 'Request failed with status code ${response.statusCode}';
     }
     
     switch (response.statusCode) {
@@ -72,13 +82,12 @@ class ApiClient {
         throw ApiException(404, 'Not found: Resource does not exist');
       case 409:
         String conflictDetail = errorMessage;
-        if (errorMessage == 'Unknown error' || errorMessage.isEmpty) {
+        if (errorMessage.contains('409') || errorMessage.isEmpty) {
           conflictDetail = 'This item already exists. Please update or remove the existing one first.';
         }
         throw ApiException(409, conflictDetail, validationErrors: validationErrors);
       case 422:
-        final exception = ApiException(422, 'Validation error: $errorMessage', validationErrors: validationErrors);
-        throw exception;
+        throw ApiException(422, 'Validation error: $errorMessage', validationErrors: validationErrors);
       case 429:
         throw ApiException(429, 'Too many requests: Please wait before trying again');
       case 500:
@@ -98,10 +107,7 @@ class ApiClient {
       if (queryParams != null && queryParams.isNotEmpty) {
         uri = uri.replace(queryParameters: queryParams);
       }
-      final response = await http.get(
-        uri,
-        headers: _getHeaders(token: token),
-      ).timeout(timeout);
+      final response = await http.get(uri, headers: _getHeaders(token: token)).timeout(timeout);
       return handleResponse(response);
     } on http.ClientException catch (e) {
       throw ApiException(0, 'Network error: ${e.message}');
