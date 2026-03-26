@@ -56,6 +56,8 @@ class ApiClient {
         throw ApiException(403, 'Forbidden: Access denied');
       case 404:
         throw ApiException(404, 'Not found: Resource does not exist');
+      case 409:
+        throw ApiException(409, 'Conflict: $errorMessage');
       case 422:
         throw ApiException(422, 'Validation error: $errorMessage');
       case 500:
