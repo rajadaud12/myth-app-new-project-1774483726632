@@ -22,14 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           if [ ! -f pubspec.yaml ]; then
-            echo "name: app
-description: A new Flutter project.
-version: 1.0.0+1
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-dependencies:
-  flutter:
-    sdk: flutter" > pubspec.yaml
+            echo "name: app\ndescription: Base\nversion: 1.0.0\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\ndependencies:\n  flutter:\n    sdk: flutter" > pubspec.yaml
           fi
           flutter pub get
       - name: Build
