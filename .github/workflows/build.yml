@@ -45,7 +45,7 @@ jobs:
           if [ -z "$TARGET" ]; then TARGET="web"; fi
           
           if [ "$TARGET" == "web" ]; then
-            flutter build web --release
+            flutter build web --release --base-href "/${{ github.event.repository.name }}/"
           else
             flutter build apk --release
           fi
