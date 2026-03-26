@@ -71,7 +71,11 @@ class ApiClient {
       case 404:
         throw ApiException(404, 'Not found: Resource does not exist');
       case 409:
-        throw ApiException(409, 'Conflict: $errorMessage');
+        String conflictDetail = errorMessage;
+        if (errorMessage == 'Unknown error' || errorMessage.isEmpty) {
+          conflictDetail = 'This action could not be completed due to a conflict. Please try again or refresh the data.';
+        }
+        throw ApiException(409, conflictDetail, validationErrors: validationErrors);
       case 422:
         final exception = ApiException(422, 'Validation error: $errorMessage', validationErrors: validationErrors);
         throw exception;
