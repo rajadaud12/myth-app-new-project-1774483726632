@@ -15,6 +15,14 @@ class ApiClient {
   static const String baseUrl = 'https://api.example.com';
   static const Duration timeout = Duration(seconds: 30);
   
+  static Map<String, String> _getHeaders({String? token}) {
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
+  }
+  
   static Future<Map<String, dynamic>> handleResponse(http.Response response) async {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) {
@@ -61,11 +69,11 @@ class ApiClient {
     }
   }
   
-  static Future<Map<String, dynamic>> get(String endpoint) async {
+  static Future<Map<String, dynamic>> get(String endpoint, {String? token}) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _getHeaders(token: token),
       ).timeout(timeout);
       return handleResponse(response);
     } on http.ClientException catch (e) {
@@ -76,11 +84,11 @@ class ApiClient {
     }
   }
   
-  static Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> post(String endpoint, Map<String, dynamic> body, {String? token}) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl$endpoint'),
-        headers: {'Content-Type': 'application/json'},
+        headers: _getHeaders(token: token),
         body: json.encode(body),
       ).timeout(timeout);
       return handleResponse(response);
