@@ -1,0 +1,54 @@
+name: MYTH Build System
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "apk or web"
+        required: true
+        default: "apk"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.0"
+          channel: "stable"
+      - name: Install dependencies
+        run: |
+          if [ ! -f pubspec.yaml ]; then
+            echo "name: app
+description: A new Flutter project.
+version: 1.0.0+1
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter" > pubspec.yaml
+          fi
+          flutter pub get
+      - name: Build
+        run: |
+          if [ "${{ github.event.inputs.build_type }}" == "web" ]; then
+            flutter build web --release
+          else
+            flutter build apk --release
+          fi
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            build/web
+            build/app/outputs/flutter-apk/app-release.apk
+      - name: Deploy to GitHub Pages
+        if: github.event.inputs.build_type == 'web'
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web
