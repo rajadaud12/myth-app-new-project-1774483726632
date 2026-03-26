@@ -19,15 +19,29 @@ jobs:
         with:
           flutter-version: "3.24.0"
           channel: "stable"
-      - name: Install dependencies
+      - name: Initialize / Repair Project
         run: |
-          if [ ! -f pubspec.yaml ]; then
-            echo "name: app\ndescription: Base\nversion: 1.0.0\nenvironment:\n  sdk: '>=3.0.0 <4.0.0'\ndependencies:\n  flutter:\n    sdk: flutter" > pubspec.yaml
-          fi
+          # Backup current work
+          mkdir -p .backup
+          cp -r lib .backup/ || true
+          cp pubspec.yaml .backup/ || true
+          
+          # Generate missing infrastructure (web, android)
+          flutter create . --platforms=web,android --project-name=app --overwrite
+          
+          # Restore user code
+          cp -r .backup/lib . || true
+          cp .backup/pubspec.yaml . || true
+          
           flutter pub get
+
       - name: Build
         run: |
-          if [ "${{ github.event.inputs.build_type }}" == "web" ]; then
+          # Default to web if empty or web
+          TARGET="${{ github.event.inputs.build_type }}"
+          if [ -z "$TARGET" ]; then TARGET="web"; fi
+          
+          if [ "$TARGET" == "web" ]; then
             flutter build web --release
           else
             flutter build apk --release
