@@ -53,16 +53,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-output
+          if-no-files-found: ignore
           path: |
             build/web
             build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload Pages Artifact
+        if: github.event.inputs.build_type == 'web' || github.event_name == 'push'
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
 
   deploy:
+    if: github.event.inputs.build_type == 'web' || github.event_name == 'push'
     needs: build
     permissions:
       pages: write      # to deploy to Pages
